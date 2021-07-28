@@ -4,7 +4,7 @@ use rand::{
     Rng,
 };
 
-use super::params::Params;
+use super::{clamp_f64, clamp_vec2, params::Params};
 
 pub const RADIUS: f64 = 0.5;
 
@@ -55,8 +55,8 @@ impl Person {
         }
     }
 
-    pub fn overlaps(&self, other: &Person) -> bool {
-        let pos_diff = self.position - other.position;
+    pub fn overlaps(&self, other: &Person, box_size: (f64, f64)) -> bool {
+        let pos_diff = clamp_vec2(self.position - other.position, box_size);
         pos_diff.dot(&pos_diff).sqrt() < RADIUS * 2.0
     }
 
@@ -80,8 +80,10 @@ impl Person {
         self.status.vaccinated = true;
     }
 
-    pub fn shift(&mut self, dt: f64) {
+    pub fn shift(&mut self, dt: f64, box_size: (f64, f64)) {
         self.position += self.velocity * dt;
+        self.position.x = clamp_f64(self.position.x, box_size.0);
+        self.position.y = clamp_f64(self.position.y, box_size.1);
     }
 
     pub fn set_vel(&mut self, vel: Vector2<f64>) {

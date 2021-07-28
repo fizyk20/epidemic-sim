@@ -3,10 +3,35 @@ pub mod person;
 
 use std::collections::HashSet;
 
+use nalgebra::Vector2;
 use rand::{seq::SliceRandom, Rng};
 
 use params::Params;
 use person::*;
+
+fn clamp_f64(x: f64, limit: f64) -> f64 {
+    if x > limit {
+        x - limit
+    } else if x < 0.0 {
+        x + limit
+    } else {
+        x
+    }
+}
+
+fn clamp_f64_half(x: f64, limit: f64) -> f64 {
+    if x > limit / 2.0 {
+        x - limit
+    } else if x < -limit / 2.0 {
+        x + limit
+    } else {
+        x
+    }
+}
+
+fn clamp_vec2(v: Vector2<f64>, limit: (f64, f64)) -> Vector2<f64> {
+    Vector2::new(clamp_f64_half(v.x, limit.0), clamp_f64_half(v.y, limit.1))
+}
 
 #[derive(Debug, Clone)]
 pub struct Simulation {
@@ -27,7 +52,7 @@ impl Simulation {
                 let new_person = Person::random(rng, box_size, params.speed_stdev);
                 let can_add = people
                     .iter()
-                    .all(|other: &Person| !other.overlaps(&new_person));
+                    .all(|other: &Person| !other.overlaps(&new_person, box_size));
                 if can_add {
                     people.push(new_person);
                     break;
@@ -86,13 +111,11 @@ impl Simulation {
 
     fn move_people(&mut self, dt: f64) {
         for person in &mut self.people {
-            person.shift(dt);
+            person.shift(dt, self.box_size);
         }
     }
 
-    fn find_collisions(&self) -> Vec<Collision> {
-        let mut result: Vec<Collision> = vec![];
-
+    fn find_collisions(&self) -> HashSet<(usize, usize)> {
         let mut sorted_x: Vec<usize> = (0..self.people.len()).collect();
         let mut sorted_y = sorted_x.clone();
 
@@ -111,159 +134,71 @@ impl Simulation {
                 .unwrap()
         });
 
-        // collisions with the left wall
-        for index in &sorted_x {
-            let person = &self.people[*index];
-            if person.pos().x < RADIUS {
-                result.push(Collision::Wall(*index, Wall::Left));
-            } else {
-                break;
-            }
-        }
-
-        // collisions with the right wall
-        for index in sorted_x.iter().rev() {
-            let person = &self.people[*index];
-            if person.pos().x > self.box_size.0 - RADIUS {
-                result.push(Collision::Wall(*index, Wall::Right));
-            } else {
-                break;
-            }
-        }
-
-        // collisions with the top wall
-        for index in &sorted_y {
-            let person = &self.people[*index];
-            if person.pos().y < RADIUS {
-                result.push(Collision::Wall(*index, Wall::Top));
-            } else {
-                break;
-            }
-        }
-
-        // collisions with the right wall
-        for index in sorted_y.iter().rev() {
-            let person = &self.people[*index];
-            if person.pos().y > self.box_size.1 - RADIUS {
-                result.push(Collision::Wall(*index, Wall::Bottom));
-            } else {
-                break;
-            }
-        }
-
         let mut pairs = HashSet::new();
 
+        let len = sorted_x.len();
         for (i, person_index) in sorted_x.iter().enumerate() {
-            for j in i + 1..sorted_x.len() {
+            for j in i + 1..i + 1 + len {
                 let person1 = &self.people[*person_index];
-                let person2 = &self.people[sorted_x[j]];
-                if person1.overlaps(person2) {
-                    if *person_index < sorted_x[j] {
-                        pairs.insert((*person_index, sorted_x[j]));
+                let person2 = &self.people[sorted_x[j % len]];
+                if person1.overlaps(person2, self.box_size) {
+                    if *person_index < sorted_x[j % len] {
+                        pairs.insert((*person_index, sorted_x[j % len]));
                     } else {
-                        pairs.insert((sorted_x[j], *person_index));
+                        pairs.insert((sorted_x[j % len], *person_index));
                     }
-                } else if person2.pos().x - person1.pos().x > RADIUS {
+                } else if clamp_f64_half(person2.pos().x - person1.pos().x, self.box_size.0)
+                    > RADIUS
+                {
                     break;
                 }
             }
         }
 
+        let len = sorted_y.len();
         for (i, person_index) in sorted_y.iter().enumerate() {
-            for j in i + 1..sorted_y.len() {
+            for j in i + 1..i + 1 + len {
                 let person1 = &self.people[*person_index];
-                let person2 = &self.people[sorted_y[j]];
-                if person1.overlaps(person2) {
-                    if *person_index < sorted_y[j] {
-                        pairs.insert((*person_index, sorted_y[j]));
+                let person2 = &self.people[sorted_y[j % len]];
+                if person1.overlaps(person2, self.box_size) {
+                    if *person_index < sorted_y[j % len] {
+                        pairs.insert((*person_index, sorted_y[j % len]));
                     } else {
-                        pairs.insert((sorted_y[j], *person_index));
+                        pairs.insert((sorted_y[j % len], *person_index));
                     }
-                } else if person2.pos().y - person1.pos().y > RADIUS {
+                } else if clamp_f64_half(person2.pos().y - person1.pos().y, self.box_size.1)
+                    > RADIUS
+                {
                     break;
                 }
             }
         }
 
-        for (index1, index2) in pairs {
-            result.push(Collision::People(index1, index2));
-        }
-
-        result
+        pairs
     }
 
-    fn apply_collisions<R: Rng>(&mut self, collisions: Vec<Collision>, rng: &mut R) {
-        for collision in collisions {
-            match collision {
-                Collision::Wall(index, Wall::Left) => {
-                    let person = &mut self.people[index];
-                    let mut vel = person.vel();
-                    if vel.x < 0.0 {
-                        vel.x = -vel.x;
-                    }
-                    person.set_vel(vel);
+    fn apply_collisions<R: Rng>(&mut self, collisions: HashSet<(usize, usize)>, rng: &mut R) {
+        for (index1, index2) in collisions {
+            let (new_vel1, new_vel2) = {
+                let person1 = &self.people[index1];
+                let person2 = &self.people[index2];
+                let normal = clamp_vec2(person2.pos() - person1.pos(), self.box_size).normalize();
+                let relative_vel = person1.vel() - person2.vel();
+                let vel_norm = relative_vel.dot(&normal);
+                let vel1 = person1.vel();
+                let vel2 = person2.vel();
+                if vel_norm > 0.0 {
+                    (vel1 - vel_norm * normal, vel2 + vel_norm * normal)
+                } else {
+                    (vel1, vel2)
                 }
-                Collision::Wall(index, Wall::Right) => {
-                    let person = &mut self.people[index];
-                    let mut vel = person.vel();
-                    if vel.x > 0.0 {
-                        vel.x = -vel.x;
-                    }
-                    person.set_vel(vel);
-                }
-                Collision::Wall(index, Wall::Top) => {
-                    let person = &mut self.people[index];
-                    let mut vel = person.vel();
-                    if vel.y < 0.0 {
-                        vel.y = -vel.y;
-                    }
-                    person.set_vel(vel);
-                }
-                Collision::Wall(index, Wall::Bottom) => {
-                    let person = &mut self.people[index];
-                    let mut vel = person.vel();
-                    if vel.y > 0.0 {
-                        vel.y = -vel.y;
-                    }
-                    person.set_vel(vel);
-                }
-                Collision::People(index1, index2) => {
-                    let (new_vel1, new_vel2) = {
-                        let person1 = &self.people[index1];
-                        let person2 = &self.people[index2];
-                        let normal = (person2.pos() - person1.pos()).normalize();
-                        let relative_vel = person1.vel() - person2.vel();
-                        let vel_norm = relative_vel.dot(&normal);
-                        let vel1 = person1.vel();
-                        let vel2 = person2.vel();
-                        if vel_norm > 0.0 {
-                            (vel1 - vel_norm * normal, vel2 + vel_norm * normal)
-                        } else {
-                            (vel1, vel2)
-                        }
-                    };
-                    self.people[index1].set_vel(new_vel1);
-                    self.people[index2].set_vel(new_vel2);
-                    let copy1 = self.people[index1].clone();
-                    let copy2 = self.people[index2].clone();
-                    self.people[index1].contact(self.time, self.params, copy2, rng);
-                    self.people[index2].contact(self.time, self.params, copy1, rng);
-                }
-            }
+            };
+            self.people[index1].set_vel(new_vel1);
+            self.people[index2].set_vel(new_vel2);
+            let copy1 = self.people[index1].clone();
+            let copy2 = self.people[index2].clone();
+            self.people[index1].contact(self.time, self.params, copy2, rng);
+            self.people[index2].contact(self.time, self.params, copy1, rng);
         }
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Wall {
-    Left,
-    Right,
-    Top,
-    Bottom,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Collision {
-    People(usize, usize),
-    Wall(usize, Wall),
 }
