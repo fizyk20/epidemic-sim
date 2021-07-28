@@ -2,6 +2,8 @@ mod renderer;
 mod simulation;
 
 use std::{
+    fs::File,
+    io::Read,
     sync::{Arc, RwLock},
     thread,
     time::Instant,
@@ -21,14 +23,15 @@ use rand::thread_rng;
 use renderer::*;
 use simulation::*;
 
-const SIZE_X: f64 = 300.0;
-const SIZE_Y: f64 = 300.0;
-const VEL_STDEV: f64 = 1.0;
-
 fn main() {
     let mut rng = thread_rng();
 
-    let mut sim = Simulation::new(10000, &mut rng, (SIZE_X, SIZE_Y), VEL_STDEV);
+    let mut conf_file = File::open("config.toml").unwrap();
+    let mut conf_str = String::new();
+    conf_file.read_to_string(&mut conf_str).unwrap();
+    let params = toml::from_str(&conf_str).unwrap();
+
+    let mut sim = Simulation::new(&mut rng, params);
     sim.infect(1, &mut rng);
     let sim_arc = Arc::new(RwLock::new(sim));
 
@@ -40,7 +43,12 @@ fn main() {
     let cb = ContextBuilder::new();
     let display = Display::new(wb, cb, &event_loop).unwrap();
 
-    let renderer = Renderer::new(&display, SIZE_X / 2.0, SIZE_Y / 2.0, SIZE_X);
+    let renderer = Renderer::new(
+        &display,
+        params.size_x / 2.0,
+        params.size_y / 2.0,
+        params.size_x,
+    );
 
     let sim_clone = sim_arc.clone();
 

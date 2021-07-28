@@ -4,7 +4,7 @@ use rand::{
     Rng,
 };
 
-use super::params::{INFECTION_DURATION, INFECTION_PROBABILITY};
+use super::params::Params;
 
 pub const RADIUS: f64 = 0.5;
 
@@ -84,19 +84,47 @@ impl Person {
         self.velocity = vel;
     }
 
-    pub fn contact<R: Rng>(&mut self, time: f64, other: Person, rng: &mut R) {
-        if other.status.infected.is_some() && rng.gen::<f64>() < INFECTION_PROBABILITY {
-            self.status.infected = Some(time);
+    pub fn contact<R: Rng>(&mut self, time: f64, params: Params, other: Person, rng: &mut R) {
+        if other.status.infected.is_some() {
+            let draw = rng.gen::<f64>();
+            let threshold = match (
+                self.status.past_infected,
+                self.status.vaccinated,
+                other.status.vaccinated,
+            ) {
+                (false, false, false) => params.infection_prob_infected_to_general,
+                (true, false, false) => params.infection_prob_infected_to_healed,
+                (_, true, false) => params.infection_prob_infected_to_vaccinated,
+                (false, false, true) => params.infection_prob_vaccinated_to_general,
+                (true, false, true) => params.infection_prob_vaccinated_to_healed,
+                (_, true, true) => params.infection_prob_vaccinated_to_vaccinated,
+            };
+            if draw < threshold {
+                self.status.infected = Some(time);
+            }
         }
     }
 
-    pub fn update_status<R: Rng>(&mut self, time: f64, _rng: &mut R) {
+    pub fn update_status<R: Rng>(
+        &mut self,
+        time: f64,
+        params: Params,
+        dt: f64,
+        rng: &mut R,
+    ) -> bool {
         match self.status.infected {
-            Some(infected) if infected < time - INFECTION_DURATION => {
-                self.status.infected = None;
-                self.status.past_infected = true;
+            Some(infected) => {
+                if rng.gen::<f64>() < params.death_rate * dt / params.infection_avg_duration {
+                    return true;
+                }
+                let heal_prob = (time - infected) / params.infection_avg_duration - 0.7;
+                if rng.gen::<f64>() < heal_prob {
+                    self.status.infected = None;
+                    self.status.past_infected = true;
+                }
             }
             _ => (),
         }
+        false
     }
 }

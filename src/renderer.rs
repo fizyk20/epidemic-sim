@@ -118,8 +118,18 @@ impl Renderer {
 
 fn color(status: &Status) -> [f64; 3] {
     if status.infected().is_some() {
-        [1.0, 0.0, 0.0]
+        if status.vaccinated() {
+            [0.7, 0.0, 0.7]
+        } else {
+            [1.0, 0.0, 0.0]
+        }
     } else {
-        [0.0, 0.8, 0.0]
+        if status.vaccinated() {
+            [0.0, 0.0, 1.0]
+        } else if status.past_infected() {
+            [0.5, 0.5, 0.0]
+        } else {
+            [0.0, 0.7, 0.0]
+        }
     }
 }

@@ -5,28 +5,26 @@ use std::collections::HashSet;
 
 use rand::{seq::SliceRandom, Rng};
 
-use self::person::*;
+use params::Params;
+use person::*;
 
 #[derive(Debug, Clone)]
 pub struct Simulation {
     box_size: (f64, f64),
     time: f64,
     people: Vec<Person>,
+    params: Params,
 }
 
 const MAX_STEP_DURATION: f64 = 0.05;
 
 impl Simulation {
-    pub fn new<R: Rng>(
-        n: usize,
-        rng: &mut R,
-        box_size: (f64, f64),
-        speed_stdev: f64,
-    ) -> Simulation {
+    pub fn new<R: Rng>(rng: &mut R, params: Params) -> Simulation {
         let mut people = vec![];
-        for _ in 0..n {
+        let box_size = (params.size_x, params.size_y);
+        for _ in 0..params.num_people {
             loop {
-                let new_person = Person::random(rng, box_size, speed_stdev);
+                let new_person = Person::random(rng, box_size, params.speed_stdev);
                 let can_add = people
                     .iter()
                     .all(|other: &Person| !other.overlaps(&new_person));
@@ -41,6 +39,7 @@ impl Simulation {
             box_size,
             time: 0.0,
             people,
+            params,
         }
     }
 
@@ -57,15 +56,23 @@ impl Simulation {
     }
 
     pub fn step<R: Rng>(&mut self, dt: f64, rng: &mut R) {
-        let dt = dt.max(MAX_STEP_DURATION);
+        let dt = dt.min(MAX_STEP_DURATION);
 
         self.move_people(dt);
         let collisions = self.find_collisions();
         self.apply_collisions(collisions, rng);
 
         self.time += dt;
-        for person in &mut self.people {
-            person.update_status(self.time, rng);
+
+        let mut dead = vec![];
+        for (i, person) in self.people.iter_mut().enumerate() {
+            if person.update_status(self.time, self.params, dt, rng) {
+                dead.push(i);
+            }
+        }
+        dead.sort();
+        for index in dead.into_iter().rev() {
+            self.people.remove(index);
         }
     }
 
@@ -231,8 +238,8 @@ impl Simulation {
                     self.people[index2].set_vel(new_vel2);
                     let copy1 = self.people[index1].clone();
                     let copy2 = self.people[index2].clone();
-                    self.people[index1].contact(self.time, copy2, rng);
-                    self.people[index2].contact(self.time, copy1, rng);
+                    self.people[index1].contact(self.time, self.params, copy2, rng);
+                    self.people[index2].contact(self.time, self.params, copy1, rng);
                 }
             }
         }
