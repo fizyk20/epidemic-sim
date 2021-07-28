@@ -1,0 +1,2 @@
+pub const INFECTION_PROBABILITY: f64 = 0.1;
+pub const INFECTION_DURATION: f64 = 60.0;
