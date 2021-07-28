@@ -76,6 +76,10 @@ impl Person {
         self.status.infected = Some(time);
     }
 
+    pub fn vaccinate(&mut self) {
+        self.status.vaccinated = true;
+    }
+
     pub fn shift(&mut self, dt: f64) {
         self.position += self.velocity * dt;
     }

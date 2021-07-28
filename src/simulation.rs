@@ -51,6 +51,14 @@ impl Simulation {
         }
     }
 
+    pub fn vaccinate<R: Rng>(&mut self, n: usize, rng: &mut R) {
+        let mut indices: Vec<_> = (0..self.people.len()).collect();
+        indices.shuffle(rng);
+        for index in indices.into_iter().take(n) {
+            self.people[index].vaccinate();
+        }
+    }
+
     pub fn people(&self) -> &[Person] {
         &self.people
     }

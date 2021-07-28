@@ -32,7 +32,8 @@ fn main() {
     let params = toml::from_str(&conf_str).unwrap();
 
     let mut sim = Simulation::new(&mut rng, params);
-    sim.infect(1, &mut rng);
+    sim.infect(params.init_infected, &mut rng);
+    sim.vaccinate(params.init_vaccinated, &mut rng);
     let sim_arc = Arc::new(RwLock::new(sim));
 
     println!("Simulation created.");
