@@ -1,6 +1,9 @@
 mod matrix;
 
-use glium::{implement_vertex, index, uniform, Display, Program, Surface, VertexBuffer};
+use glium::{
+    draw_parameters::DrawParameters, implement_vertex, index, uniform, Display, Frame, Program,
+    Rect, Surface, VertexBuffer,
+};
 use nalgebra::Vector2;
 
 use crate::simulation::{
@@ -71,29 +74,36 @@ impl Renderer {
         VertexBuffer::new(display, &shape).unwrap()
     }
 
-    pub fn draw(&self, display: &Display, sim: &Simulation) {
-        let mut target = display.draw();
-
-        target.clear_color(1.0, 1.0, 1.0, 1.0);
-
+    fn draw_sim(&self, display: &Display, target: &mut Frame, sim: &Simulation) {
         let (size_x, size_y) = target.get_dimensions();
-        let (size_x, size_y) = (size_x as f64, size_y as f64);
+
+        let (box_size, horizontal) = if size_x < size_y {
+            (size_x - 20, false)
+        } else {
+            (size_y - 20, true)
+        };
 
         let matrix = Matrix::translation(-self.center.x as f32, -self.center.y as f32)
-            * if size_x < size_y {
-                Matrix::scale(
-                    2.0 / self.size_smaller as f32,
-                    (2.0 * size_x / size_y / self.size_smaller) as f32,
-                )
-            } else {
-                Matrix::scale(
-                    (2.0 * size_y / size_x / self.size_smaller) as f32,
-                    2.0 / self.size_smaller as f32,
-                )
-            };
+            * Matrix::scale(
+                2.0 / self.size_smaller as f32,
+                2.0 / self.size_smaller as f32,
+            );
 
         let vertex_buffer = Self::circle(display);
         let indices = index::NoIndices(index::PrimitiveType::TriangleFan);
+        let draw_parameters = DrawParameters {
+            viewport: Some(Rect {
+                left: 10,
+                bottom: if horizontal {
+                    10
+                } else {
+                    size_y - box_size - 10
+                },
+                width: box_size,
+                height: box_size,
+            }),
+            ..Default::default()
+        };
 
         for person in sim.people() {
             let matrix2 =
@@ -109,10 +119,18 @@ impl Renderer {
                     &indices,
                     &self.program,
                     &uniforms,
-                    &Default::default(),
+                    &draw_parameters,
                 )
                 .unwrap();
         }
+    }
+
+    pub fn draw(&self, display: &Display, sim: &Simulation) {
+        let mut target = display.draw();
+
+        target.clear_color(1.0, 1.0, 1.0, 1.0);
+
+        self.draw_sim(display, &mut target, sim);
 
         target.finish().unwrap();
     }
