@@ -14,10 +14,10 @@ const VERTEX_SHADER_SRC: &'static str = r#"
     #version 140
 
     in vec2 position;
-    in vec3 color;
-    out vec3 in_color;
 
     uniform mat4 matrix;
+    uniform vec3 color;
+    out vec3 in_color;
 
     void main() {
         gl_Position = matrix * vec4(position, 0.0, 1.0);
@@ -39,10 +39,9 @@ const FRAGMENT_SHADER_SRC: &'static str = r#"
 #[derive(Debug, Clone, Copy)]
 struct Vertex {
     position: [f64; 2],
-    color: [f64; 3],
 }
 
-implement_vertex!(Vertex, position, color);
+implement_vertex!(Vertex, position);
 
 pub struct Renderer {
     center: Vector2<f64>,
@@ -58,6 +57,18 @@ impl Renderer {
             program: Program::from_source(display, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC, None)
                 .unwrap(),
         }
+    }
+
+    fn circle(display: &Display) -> VertexBuffer<Vertex> {
+        let mut shape = vec![];
+        let n_sides = 20;
+        for i in 0..n_sides {
+            let ang = 2.0 * 3.14159 * (i as f64) / n_sides as f64;
+            shape.push(Vertex {
+                position: [RADIUS * ang.cos(), RADIUS * ang.sin()],
+            });
+        }
+        VertexBuffer::new(display, &shape).unwrap()
     }
 
     pub fn draw(&self, display: &Display, sim: &Simulation) {
@@ -81,24 +92,15 @@ impl Renderer {
                 )
             };
 
-        for person in sim.people() {
-            let mut shape = vec![];
-            let n_sides = 20;
-            for i in 0..n_sides {
-                let ang = 2.0 * 3.14159 * (i as f64) / n_sides as f64;
-                shape.push(Vertex {
-                    position: [
-                        person.pos().x + RADIUS * ang.cos(),
-                        person.pos().y + RADIUS * ang.sin(),
-                    ],
-                    color: color(person.status()),
-                });
-            }
+        let vertex_buffer = Self::circle(display);
+        let indices = index::NoIndices(index::PrimitiveType::TriangleFan);
 
-            let vertex_buffer = VertexBuffer::new(display, &shape).unwrap();
-            let indices = index::NoIndices(index::PrimitiveType::TriangleFan);
+        for person in sim.people() {
+            let matrix2 =
+                Matrix::translation(person.pos().x as f32, person.pos().y as f32) * matrix;
             let uniforms = uniform! {
-                matrix: matrix.inner(),
+                matrix: matrix2.inner(),
+                color: color(person.status()),
             };
 
             target
@@ -116,7 +118,7 @@ impl Renderer {
     }
 }
 
-fn color(status: &Status) -> [f64; 3] {
+fn color(status: &Status) -> [f32; 3] {
     if status.infected().is_some() {
         if status.vaccinated() {
             [0.7, 0.0, 0.7]
