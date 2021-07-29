@@ -33,15 +33,15 @@ pub struct Params {
 }
 
 fn default_num_people() -> usize {
-    10000
+    1000
 }
 
 fn default_size() -> f64 {
-    300.0
+    100.0
 }
 
 fn default_speed_stdev() -> f64 {
-    10.0
+    5.0
 }
 
 fn default_infected() -> usize {
@@ -53,23 +53,23 @@ fn default_vaccinated() -> usize {
 }
 
 fn default_inf_to_gen() -> f64 {
-    0.1
-}
-
-fn default_inf_to_healed() -> f64 {
     0.02
 }
 
+fn default_inf_to_healed() -> f64 {
+    0.004
+}
+
 fn default_inf_to_vacc() -> f64 {
-    0.001
+    0.002
 }
 
 fn default_vacc_to_gen() -> f64 {
-    0.06
+    0.012
 }
 
 fn default_vacc_to_healed() -> f64 {
-    0.012
+    0.0024
 }
 
 fn default_vacc_to_vacc() -> f64 {
