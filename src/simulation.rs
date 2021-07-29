@@ -201,4 +201,41 @@ impl Simulation {
             self.people[index2].contact(self.time, self.params, copy1, rng);
         }
     }
+
+    pub fn stats(&self) -> Statistics {
+        let mut result: Statistics = Default::default();
+
+        result.population = self.people.len();
+        result.dead = self.params.num_people - self.people.len();
+
+        for person in &self.people {
+            if person.status().infected().is_some() {
+                result.infected += 1;
+            }
+            if person.status().vaccinated() {
+                result.vaccinated += 1;
+            }
+            if person.status().vaccinated() && person.status().infected().is_some() {
+                result.vaccinated_infected += 1;
+            }
+            if person.status().past_infected()
+                && !person.status().vaccinated()
+                && person.status().infected().is_none()
+            {
+                result.healed += 1;
+            }
+        }
+
+        result
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Statistics {
+    pub population: usize,
+    pub dead: usize,
+    pub infected: usize,
+    pub healed: usize,
+    pub vaccinated: usize,
+    pub vaccinated_infected: usize,
 }
