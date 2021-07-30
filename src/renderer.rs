@@ -1,4 +1,5 @@
 mod matrix;
+mod stats_buf;
 
 use std::fs::File;
 
@@ -15,6 +16,7 @@ use crate::simulation::{
 };
 
 use matrix::Matrix;
+use stats_buf::StatsBuf;
 
 const VERTEX_SHADER_SRC: &'static str = r#"
     #version 140
@@ -55,6 +57,8 @@ pub struct Renderer {
     program: Program,
     text_system: TextSystem,
     font: FontTexture,
+    stats_buf: StatsBuf,
+    last_t: f64,
 }
 
 impl Renderer {
@@ -69,6 +73,8 @@ impl Renderer {
                 .unwrap(),
             text_system,
             font,
+            stats_buf: StatsBuf::new(),
+            last_t: -0.01,
         }
     }
 
@@ -135,7 +141,26 @@ impl Renderer {
         }
     }
 
-    fn draw_numbers(&self, display: &Display, target: &mut Frame, sim: &Simulation) {
+    fn draw_text(
+        &self,
+        target: &mut Frame,
+        text: &str,
+        matrix: Matrix,
+        draw_parameters: DrawParameters,
+    ) {
+        let text = TextDisplay::new(&self.text_system, &self.font, text);
+
+        glium_text::draw(
+            &text,
+            &self.text_system,
+            target,
+            matrix.inner(),
+            (0.0, 0.0, 0.0, 1.0),
+            draw_parameters.clone(),
+        );
+    }
+
+    fn draw_numbers(&self, target: &mut Frame, sim: &Simulation) {
         let (size_x, size_y) = target.get_dimensions();
 
         let (box_size, horizontal) = if size_x < size_y {
@@ -174,124 +199,124 @@ impl Renderer {
 
         let stats = sim.stats();
 
-        let population = TextDisplay::new(
-            &self.text_system,
-            &self.font,
+        self.draw_text(
+            target,
             &format!("Population: {}", stats.population),
+            Matrix::translation(0.1, -1.0) * matrix,
+            draw_parameters.clone(),
         );
 
-        let infected = TextDisplay::new(
-            &self.text_system,
-            &self.font,
+        self.draw_text(
+            target,
             &format!("Infected: {}", stats.infected),
+            Matrix::translation(0.1, -2.5) * matrix,
+            draw_parameters.clone(),
         );
 
-        let vaccinated_infected = TextDisplay::new(
-            &self.text_system,
-            &self.font,
+        self.draw_text(
+            target,
             &format!("   of these, vaccinated: {}", stats.vaccinated_infected),
+            Matrix::translation(0.1, -4.0) * matrix,
+            draw_parameters.clone(),
         );
 
-        let healed = TextDisplay::new(
-            &self.text_system,
-            &self.font,
+        self.draw_text(
+            target,
             &format!("Healed: {}", stats.healed),
+            Matrix::translation(0.1, -5.5) * matrix,
+            draw_parameters.clone(),
         );
 
-        let vaccinated = TextDisplay::new(
-            &self.text_system,
-            &self.font,
+        self.draw_text(
+            target,
             &format!("Vaccinated: {}", stats.vaccinated),
+            Matrix::translation(0.1, -7.0) * matrix,
+            draw_parameters.clone(),
         );
 
-        let dead = TextDisplay::new(
-            &self.text_system,
-            &self.font,
+        self.draw_text(
+            target,
             &format!("Dead: {}", stats.dead),
-        );
-
-        glium_text::draw(
-            &population,
-            &self.text_system,
-            target,
-            (Matrix::translation(0.1, -1.0) * matrix).inner(),
-            (0.0, 0.0, 0.0, 1.0),
-            draw_parameters.clone(),
-        );
-
-        glium_text::draw(
-            &infected,
-            &self.text_system,
-            target,
-            (Matrix::translation(0.1, -2.5) * matrix).inner(),
-            (0.0, 0.0, 0.0, 1.0),
-            draw_parameters.clone(),
-        );
-
-        glium_text::draw(
-            &vaccinated_infected,
-            &self.text_system,
-            target,
-            (Matrix::translation(0.1, -4.0) * matrix).inner(),
-            (0.0, 0.0, 0.0, 1.0),
-            draw_parameters.clone(),
-        );
-
-        glium_text::draw(
-            &healed,
-            &self.text_system,
-            target,
-            (Matrix::translation(0.1, -5.5) * matrix).inner(),
-            (0.0, 0.0, 0.0, 1.0),
-            draw_parameters.clone(),
-        );
-
-        glium_text::draw(
-            &vaccinated,
-            &self.text_system,
-            target,
-            (Matrix::translation(0.1, -7.0) * matrix).inner(),
-            (0.0, 0.0, 0.0, 1.0),
-            draw_parameters.clone(),
-        );
-
-        glium_text::draw(
-            &dead,
-            &self.text_system,
-            target,
-            (Matrix::translation(0.1, -8.5) * matrix).inner(),
-            (0.0, 0.0, 0.0, 1.0),
+            Matrix::translation(0.1, -8.5) * matrix,
             draw_parameters,
         );
     }
 
-    pub fn draw(&self, display: &Display, sim: &Simulation) {
+    fn graph_viewport(&self, target: &Frame) -> Rect {
+        let (size_x, size_y) = target.get_dimensions();
+
+        let (box_size, horizontal) = if size_x < size_y {
+            (size_x, false)
+        } else {
+            (size_y, true)
+        };
+
+        if horizontal {
+            Rect {
+                left: box_size + 10,
+                bottom: size_y / 3,
+                width: size_x - box_size - 20,
+                height: size_y / 3,
+            }
+        } else {
+            let free_height = size_y - box_size;
+            Rect {
+                left: 10,
+                bottom: free_height / 3,
+                width: size_x - 20,
+                height: free_height / 3,
+            }
+        }
+    }
+
+    pub fn draw(&mut self, display: &Display, sim: &Simulation) {
         let mut target = display.draw();
 
         target.clear_color(1.0, 1.0, 1.0, 1.0);
 
         self.draw_sim(display, &mut target, sim);
 
-        self.draw_numbers(display, &mut target, sim);
+        self.draw_numbers(&mut target, sim);
+
+        if self.last_t < sim.time().floor() {
+            self.stats_buf.record(sim.time().floor(), sim.stats());
+        }
+
+        self.last_t = sim.time();
+
+        let graph_viewport = self.graph_viewport(&target);
+        let draw_parameters = DrawParameters {
+            viewport: Some(graph_viewport),
+            ..Default::default()
+        };
+        self.stats_buf
+            .draw(display, &mut target, &self, &draw_parameters);
 
         target.finish().unwrap();
     }
 }
 
+const COLOR_HEALTHY: [f32; 3] = [0.0, 0.7, 0.0];
+const COLOR_INFECTED: [f32; 3] = [1.0, 0.0, 0.0];
+const COLOR_HEALED: [f32; 3] = [0.5, 0.5, 0.0];
+const COLOR_VACCINATED: [f32; 3] = [0.0, 0.0, 1.0];
+const COLOR_VACCINATED_INFECTED: [f32; 3] = [0.7, 0.0, 0.7];
+const COLOR_DEAD: [f32; 3] = [0.2, 0.2, 0.2];
+
 fn color(status: &Status) -> [f32; 3] {
     if status.infected().is_some() {
         if status.vaccinated() {
-            [0.7, 0.0, 0.7]
+            COLOR_VACCINATED_INFECTED
         } else {
-            [1.0, 0.0, 0.0]
+            COLOR_INFECTED
         }
     } else {
         if status.vaccinated() {
-            [0.0, 0.0, 1.0]
+            COLOR_VACCINATED
         } else if status.past_infected() {
-            [0.5, 0.5, 0.0]
+            COLOR_HEALED
         } else {
-            [0.0, 0.7, 0.0]
+            COLOR_HEALTHY
         }
     }
 }

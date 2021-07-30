@@ -44,7 +44,7 @@ fn main() {
     let cb = ContextBuilder::new();
     let display = Display::new(wb, cb, &event_loop).unwrap();
 
-    let renderer = Renderer::new(
+    let mut renderer = Renderer::new(
         &display,
         params.size_x / 2.0,
         params.size_y / 2.0,

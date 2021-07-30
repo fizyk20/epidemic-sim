@@ -84,6 +84,10 @@ impl Simulation {
         }
     }
 
+    pub fn time(&self) -> f64 {
+        self.time
+    }
+
     pub fn people(&self) -> &[Person] {
         &self.people
     }
