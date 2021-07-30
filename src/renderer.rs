@@ -173,14 +173,14 @@ impl Renderer {
             Rect {
                 left: box_size + 10,
                 bottom: 0,
-                width: size_x - box_size - 20,
+                width: (size_x - box_size) / 2 - 20,
                 height: size_y - 20,
             }
         } else {
             Rect {
                 left: 10,
                 bottom: 0,
-                width: size_x - 20,
+                width: size_x / 2 - 20,
                 height: size_y - box_size - 20,
             }
         };
@@ -188,7 +188,7 @@ impl Renderer {
         let w = viewport.width as f32;
         let h = viewport.height as f32;
 
-        let matrix = Matrix::scale(1.0 / 60.0, 1.0 / 60.0)
+        let matrix = Matrix::scale(1.0 / 30.0, 1.0 / 30.0)
             * Matrix::translation(-0.5, 0.5 * h / w)
             * Matrix::scale(2.0, 2.0 * w / h);
 
@@ -242,6 +242,88 @@ impl Renderer {
         );
     }
 
+    fn draw_key(&self, display: &Display, target: &mut Frame) {
+        let (size_x, size_y) = target.get_dimensions();
+
+        let (box_size, horizontal) = if size_x < size_y {
+            (size_x, false)
+        } else {
+            (size_y, true)
+        };
+
+        let viewport = if horizontal {
+            Rect {
+                left: box_size + (size_x - box_size) / 2 + 10,
+                bottom: 0,
+                width: (size_x - box_size) / 2 - 20,
+                height: size_y - 20,
+            }
+        } else {
+            Rect {
+                left: 10 + size_x / 2,
+                bottom: 0,
+                width: size_x / 2 - 20,
+                height: size_y - box_size - 20,
+            }
+        };
+
+        let w = viewport.width as f32;
+        let h = viewport.height as f32;
+
+        let matrix = Matrix::scale(1.0 / 30.0, 1.0 / 30.0)
+            * Matrix::translation(-0.5, 0.5 * h / w)
+            * Matrix::scale(2.0, 2.0 * w / h);
+
+        let draw_parameters = DrawParameters {
+            viewport: Some(viewport),
+            ..Default::default()
+        };
+
+        let elements = [
+            (COLOR_HEALTHY, "Healthy"),
+            (COLOR_INFECTED, "Infected"),
+            (COLOR_HEALED, "Healed"),
+            (COLOR_VACCINATED, "Vaccinated"),
+            (COLOR_VACCINATED_INFECTED, "Vaccinated and infected"),
+            (COLOR_DEAD, "Dead (graph only)"),
+        ];
+
+        self.draw_text(
+            target,
+            "Color key:",
+            Matrix::translation(0.1, -1.0) * matrix,
+            draw_parameters.clone(),
+        );
+
+        let vertex_buffer = Self::circle(display);
+        let indices = index::NoIndices(index::PrimitiveType::TriangleFan);
+
+        for (i, (color, name)) in elements.iter().enumerate() {
+            let matrix2 = Matrix::translation(0.55, -2.5 - i as f32 * 1.5) * matrix;
+            let uniforms = uniform! {
+                matrix: matrix2.inner(),
+                color: *color,
+            };
+
+            target
+                .draw(
+                    &vertex_buffer,
+                    &indices,
+                    &self.program,
+                    &uniforms,
+                    &draw_parameters,
+                )
+                .unwrap();
+
+            self.draw_text(
+                target,
+                name,
+                Matrix::translation(1.6, -3.02 - i as f32 * 1.5) * matrix,
+                draw_parameters.clone(),
+            );
+        }
+    }
+
     fn graph_viewport(&self, target: &Frame) -> Rect {
         let (size_x, size_y) = target.get_dimensions();
 
@@ -277,6 +359,8 @@ impl Renderer {
         self.draw_sim(display, &mut target, sim);
 
         self.draw_numbers(&mut target, sim);
+
+        self.draw_key(display, &mut target);
 
         if self.last_t < sim.time().floor() {
             self.stats_buf.record(sim.time().floor(), sim.stats());
