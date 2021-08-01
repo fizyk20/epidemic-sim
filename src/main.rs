@@ -58,6 +58,7 @@ fn main() {
     let sim_clone = sim_arc.clone();
     let sim_params_clone = sim_params_arc.clone();
 
+    // simulation thread
     thread::spawn(move || {
         let mut now = Instant::now();
         let mut rng = thread_rng();
@@ -73,6 +74,7 @@ fn main() {
         }
     });
 
+    // event handling loop (in main thread)
     event_loop.run(move |ev, _, control_flow| {
         match ev {
             Event::WindowEvent { event, .. } => match event {
@@ -102,10 +104,12 @@ fn main() {
                 }
                 _ => return,
             },
+            Event::MainEventsCleared => {
+                let sim = sim_clone.read().unwrap().clone();
+                renderer.draw(&display, &sim);
+            }
             _ => (),
         }
-
-        let sim = sim_clone.read().unwrap().clone();
-        renderer.draw(&display, &sim);
+        *control_flow = ControlFlow::Poll;
     });
 }
