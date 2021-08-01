@@ -73,7 +73,7 @@ fn default_vacc_to_healed() -> f64 {
 }
 
 fn default_vacc_to_vacc() -> f64 {
-    0.0006
+    0.0012
 }
 
 fn default_duration() -> f64 {

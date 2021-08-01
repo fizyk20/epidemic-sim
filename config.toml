@@ -6,9 +6,9 @@
  init_vaccinated = 300
 # infection_prob_infected_to_general = 0.02
 # infection_prob_infected_to_healed = 0.004
-# infection_prob_infected_to_vaccinated = 0.001
+# infection_prob_infected_to_vaccinated = 0.002
 # infection_prob_vaccinated_to_general = 0.012
 # infection_prob_vaccinated_to_healed = 0.0024
-# infection_prob_vaccinated_to_vaccinated = 0.0006
+# infection_prob_vaccinated_to_vaccinated = 0.0012
 # infection_avg_duration = 30
 # death_rate = 0.02
