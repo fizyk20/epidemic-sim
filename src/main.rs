@@ -11,7 +11,7 @@ use std::{
 
 use glium::{
     glutin::{
-        event::{Event, WindowEvent},
+        event::{ElementState, Event, VirtualKeyCode, WindowEvent},
         event_loop::{ControlFlow, EventLoop},
         window::WindowBuilder,
         ContextBuilder,
@@ -35,6 +35,10 @@ fn main() {
     sim.infect(params.init_infected, &mut rng);
     sim.vaccinate(params.init_vaccinated, &mut rng);
     let sim_arc = Arc::new(RwLock::new(sim));
+    let sim_params_arc = Arc::new(RwLock::new(SimulationParameters {
+        time_compression: 1.0,
+        running: false,
+    }));
 
     println!("Simulation created.");
 
@@ -52,6 +56,7 @@ fn main() {
     );
 
     let sim_clone = sim_arc.clone();
+    let sim_params_clone = sim_params_arc.clone();
 
     thread::spawn(move || {
         let mut now = Instant::now();
@@ -62,7 +67,8 @@ fn main() {
             now = Instant::now();
 
             let mut sim = sim_arc.read().unwrap().clone();
-            sim.step(dt, &mut rng);
+            let params = *sim_params_arc.read().unwrap();
+            sim.step(dt, &mut rng, &params);
             *sim_arc.write().unwrap() = sim;
         }
     });
@@ -73,6 +79,26 @@ fn main() {
                 WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit;
                     return;
+                }
+                WindowEvent::KeyboardInput { input, .. } => {
+                    match (input.state, input.virtual_keycode) {
+                        (ElementState::Pressed, Some(VirtualKeyCode::Space)) => {
+                            sim_params_clone.write().unwrap().toggle_running();
+                        }
+                        (ElementState::Pressed, Some(VirtualKeyCode::T)) => {
+                            sim_params_clone
+                                .write()
+                                .unwrap()
+                                .increase_time_compression();
+                        }
+                        (ElementState::Pressed, Some(VirtualKeyCode::R)) => {
+                            sim_params_clone
+                                .write()
+                                .unwrap()
+                                .decrease_time_compression();
+                        }
+                        _ => (),
+                    }
                 }
                 _ => return,
             },

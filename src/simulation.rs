@@ -33,6 +33,26 @@ fn clamp_vec2(v: Vector2<f64>, limit: (f64, f64)) -> Vector2<f64> {
     Vector2::new(clamp_f64_half(v.x, limit.0), clamp_f64_half(v.y, limit.1))
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct SimulationParameters {
+    pub time_compression: f64,
+    pub running: bool,
+}
+
+impl SimulationParameters {
+    pub fn increase_time_compression(&mut self) {
+        self.time_compression *= 2.0;
+    }
+
+    pub fn decrease_time_compression(&mut self) {
+        self.time_compression /= 2.0;
+    }
+
+    pub fn toggle_running(&mut self) {
+        self.running = !self.running;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Simulation {
     box_size: (f64, f64),
@@ -92,8 +112,12 @@ impl Simulation {
         &self.people
     }
 
-    pub fn step<R: Rng>(&mut self, dt: f64, rng: &mut R) {
-        let dt = dt.min(MAX_STEP_DURATION);
+    pub fn step<R: Rng>(&mut self, dt: f64, rng: &mut R, params: &SimulationParameters) {
+        if !params.running {
+            return;
+        }
+
+        let dt = dt.min(MAX_STEP_DURATION) * params.time_compression;
 
         self.move_people(dt);
         let collisions = self.find_collisions();
